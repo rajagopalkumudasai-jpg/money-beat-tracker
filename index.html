@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#07111f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Money & Beat Ledger</title>
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --bg:#07111f; --panel:#0f1b2d; --panel2:#111f33; --line:#223650;
+      --text:#f7fafc; --muted:#9eb0c6; --accent:#4cc9f0; --good:#34d399;
+      --warn:#fbbf24; --danger:#f87171;
+    }
+    *{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%}
+    body{
+      margin:0; min-height:100vh; color:var(--text);
+      background:linear-gradient(180deg,#050c16 0%,var(--bg) 35%,#081423 100%);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+      padding-bottom:env(safe-area-inset-bottom);
+    }
+    button,input,select{font:inherit}
+    button{touch-action:manipulation}
+    .app{max-width:1250px;margin:auto;padding:16px}
+    .hero{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;margin-bottom:14px}
+    h1{margin:0;font-size:clamp(26px,5vw,40px);line-height:1.05}
+    .subtitle{color:var(--muted);margin-top:6px;font-size:14px}
+    .badge{
+      background:#0e2a3a;border:1px solid #1b5267;color:#bff3ff;
+      border-radius:999px;padding:8px 12px;font-size:12px;white-space:nowrap;
+    }
+
+    .summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px}
+    .card{background:rgba(15,27,45,.96);border:1px solid var(--line);border-radius:16px;padding:14px}
+    .klabel{color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-size:10px;font-weight:800}
+    .kvalue{font-size:clamp(18px,2.8vw,26px);font-weight:850;margin-top:6px;overflow-wrap:anywhere}
+
+    .toolbar{
+      display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:10px;
+      align-items:end;margin-bottom:12px;
+    }
+    label{display:block;color:var(--muted);font-size:12px;font-weight:700;margin-bottom:6px}
+    .input,.select{
+      width:100%;min-height:46px;border-radius:11px;border:1px solid var(--line);
+      background:#091524;color:var(--text);padding:10px 12px;outline:none;font-size:16px;
+    }
+    .input:focus,.select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(76,201,240,.13)}
+    .money-input{
+      -moz-appearance:textfield;appearance:textfield;
+      text-align:right;font-variant-numeric:tabular-nums;
+    }
+    .money-input::-webkit-outer-spin-button,.money-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    .btn{
+      min-height:46px;border:0;border-radius:11px;padding:10px 14px;
+      background:var(--accent);color:#00202c;font-weight:850;cursor:pointer;
+    }
+    .btn.secondary{background:#17273c;color:#e9f2fb;border:1px solid var(--line)}
+    .btn.good{background:var(--good);color:#05271d}
+    .btn.warn{background:var(--warn);color:#2b1d00}
+    .btn.danger{background:#641f2a;color:#fff}
+    .btn:active{transform:translateY(1px)}
+
+    .completion{
+      display:none;margin-bottom:12px;background:#2b260e;border:1px solid #6d5a10;
+      border-radius:16px;padding:14px;
+    }
+    .completion.show{display:block}
+    .completion-title{font-weight:850;margin-bottom:5px}
+    .completion p{margin:0 0 10px;color:#e8ddaa;font-size:13px}
+    .completion-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+    .table-wrap{
+      overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);
+      border-radius:16px;background:var(--panel);
+    }
+    table{border-collapse:collapse;width:100%;min-width:1050px}
+    th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:center}
+    th{
+      position:sticky;top:0;z-index:3;background:#0a1727;color:#c4d4e6;
+      text-transform:uppercase;font-size:10px;letter-spacing:.04em;white-space:nowrap
+    }
+    td{font-size:14px}
+    td input{
+      width:100%;min-height:42px;background:#091524;color:var(--text);border:1px solid #29405e;
+      border-radius:9px;padding:8px 9px;font-size:16px;outline:none;
+    }
+    td input:focus{border-color:var(--accent)}
+    td input[type="date"]{min-width:148px}
+    .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+    .cycle-hit{color:var(--good);font-weight:850}
+    .carry{color:#bfdbfe;font-weight:800}
+    .negative{color:var(--danger)}
+    .muted{color:var(--muted)}
+    .footer-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .footer-actions .btn{flex:0 0 auto}
+    .save-note{color:var(--muted);font-size:12px;margin-top:10px;line-height:1.4}
+
+    dialog{
+      border:1px solid var(--line);border-radius:18px;background:#0d1a2b;color:var(--text);
+      width:min(92vw,470px);padding:0;box-shadow:0 25px 80px rgba(0,0,0,.55)
+    }
+    dialog::backdrop{background:rgba(0,0,0,.65)}
+    .modal-body{padding:18px}
+    .modal-body h3{margin:0 0 8px}
+    .modal-body p{color:var(--muted);margin:0 0 14px;line-height:1.45}
+    .modal-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .modal-actions .btn{flex:1}
+
+    @media(max-width:900px){
+      .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .toolbar{grid-template-columns:1fr 1fr}
+      .toolbar .wide{grid-column:1/-1}
+      .hero{align-items:flex-start;flex-direction:column}
+    }
+
+    /* Mobile card view: no cramped horizontal table */
+    @media(max-width:720px){
+      .app{padding:12px}
+      .summary{gap:8px}
+      .card{padding:12px}
+      .toolbar{grid-template-columns:1fr 1fr;gap:8px}
+      .table-wrap{border:0;background:transparent;overflow:visible}
+      table,thead,tbody,tr,th,td{display:block}
+      table{min-width:0}
+      thead{display:none}
+      tbody{display:grid;gap:11px}
+      tr{
+        border:1px solid var(--line);background:var(--panel);
+        border-radius:15px;padding:11px;
+      }
+      td{
+        display:grid;grid-template-columns:minmax(118px,42%) 1fr;gap:10px;
+        align-items:center;border:0;padding:6px 0;text-align:right;
+      }
+      td::before{
+        content:attr(data-label);color:var(--muted);font-size:11px;font-weight:800;
+        text-align:left;text-transform:uppercase;letter-spacing:.03em;
+      }
+      td:first-child{
+        border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:4px;
+        font-size:17px;font-weight:900;
+      }
+      td:first-child::before{content:"Serial No."}
+      td input{min-width:0;text-align:right}
+      td input[type="date"]{min-width:0;text-align:right}
+      .footer-actions .btn{flex:1 1 46%}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="hero">
+    <div>
+      <h1>Money & Beat Ledger</h1>
+      <div class="subtitle">₹25L base • ₹1L monthly payment • carry-forward beat settlement</div>
+    </div>
+    <div id="seriesBadge" class="badge">Series 1</div>
+  </div>
+
+  <section class="summary">
+    <div class="card"><div class="klabel">Base Amount</div><div id="baseKpi" class="kvalue">₹25,00,000</div></div>
+    <div class="card"><div class="klabel">Total Money Paid</div><div id="paidKpi" class="kvalue">₹0</div></div>
+    <div class="card"><div class="klabel">Total Beat Entered</div><div id="beatKpi" class="kvalue">₹0</div></div>
+    <div class="card"><div class="klabel">Current Carry Forward</div><div id="carryKpi" class="kvalue">₹0</div></div>
+    <div class="card"><div class="klabel">Base Cycles Completed</div><div id="cyclesKpi" class="kvalue">0</div></div>
+  </section>
+
+  <section class="card toolbar">
+    <div>
+      <label>Current Series</label>
+      <select id="seriesSelect" class="select"></select>
+    </div>
+    <div>
+      <label>Fixed Base Amount</label>
+      <input id="baseInput" class="input money-input" type="text" inputmode="numeric" value="2500000">
+    </div>
+    <div>
+      <label>Default Money Paid</label>
+      <input id="paidDefaultInput" class="input money-input" type="text" inputmode="numeric" value="100000">
+    </div>
+    <button id="applySettings" class="btn wide">Apply</button>
+    <button id="addRowTop" class="btn secondary wide">+ Serial Number</button>
+  </section>
+
+  <section id="completion" class="completion">
+    <div class="completion-title">All current serial numbers have Beat Amounts.</div>
+    <p>Do you want to continue this same series with additional serial numbers, or preserve it and start a new series?</p>
+    <div class="completion-actions">
+      <button id="continueSeries" class="btn warn">Continue Same Series</button>
+      <button id="newSeries" class="btn good">Start New Series</button>
+    </div>
+  </section>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Sl. No.</th>
+          <th>Base Cycle</th>
+          <th>Date</th>
+          <th>Money Paid</th>
+          <th>Beat Amount</th>
+          <th>Net Amount</th>
+          <th>Cumulative Beat</th>
+          <th>Carry Forward</th>
+        </tr>
+      </thead>
+      <tbody id="ledger"></tbody>
+    </table>
+  </div>
+
+  <div class="footer-actions">
+    <button id="addRow" class="btn secondary">+ Add Serial Number</button>
+    <button id="downloadExcel" class="btn good">Download Excel</button>
+    <button id="downloadBackup" class="btn secondary">Backup Data</button>
+    <button id="restoreBackup" class="btn secondary">Restore Backup</button>
+    <button id="resetCurrent" class="btn danger">Reset Current Series</button>
+  </div>
+  <input id="restoreFile" type="file" accept=".json,application/json" hidden>
+
+  <div class="save-note">
+    Changes are saved automatically in this browser on this device. Clearing Chrome site data can erase local records, so use <b>Backup Data</b> occasionally if the ledger is important.
+  </div>
+</div>
+
+<dialog id="seriesDialog">
+  <div class="modal-body">
+    <h3>Serial numbers completed</h3>
+    <p>Choose whether to add another serial number to this series or start a fresh series. Starting a new series preserves the current series and resets cumulative Beat for the new series.</p>
+    <div class="modal-actions">
+      <button id="dialogContinue" class="btn warn">Continue Same</button>
+      <button id="dialogNew" class="btn good">New Series</button>
+      <button id="dialogCancel" class="btn secondary">Cancel</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+const STORAGE_KEY = "moneyBeatLedger_pro_v1";
+const BASE_DEFAULT = 2500000;
+const MONEY_DEFAULT = 100000;
+const INITIAL_ROWS = 25;
+const START_DATE = "2026-05-20";
+
+function currency(v){
+  const n = Number(v || 0);
+  return new Intl.NumberFormat("en-IN",{
+    style:"currency",currency:"INR",maximumFractionDigits:0
+  }).format(n);
+}
+function parseAmount(v){
+  if(v === "" || v === null || v === undefined) return "";
+  const s = String(v).replace(/[^\d.-]/g,"");
+  if(s === "" || s === "-" || s === ".") return "";
+  const n = Number(s);
+  return Number.isFinite(n) ? n : "";
+}
+function addMonths(dateStr, months){
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m-1+months, d, 12, 0, 0);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+}
+function rowsFrom(startDate, count, moneyPaid){
+  return Array.from({length:count},(_,i)=>({
+    sl:i+1,
+    date:addMonths(startDate,i),
+    moneyPaid,
+    beatAmount:""
+  }));
+}
+function freshState(){
+  return {
+    baseAmount:BASE_DEFAULT,
+    defaultMoneyPaid:MONEY_DEFAULT,
+    currentSeriesId:1,
+    series:[{
+      id:1,
+      name:"Series 1",
+      startDate:START_DATE,
+      rows:rowsFrom(START_DATE,INITIAL_ROWS,MONEY_DEFAULT)
+    }]
+  };
+}
+let state;
+try{
+  state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || freshState();
+}catch(e){
+  state = freshState();
+}
+function save(){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+function currentSeries(){
+  return state.series.find(s=>s.id===state.currentSeriesId) || state.series[0];
+}
+
+/*
+Rollover logic:
+- Cumulative Beat is the active-cycle amount BEFORE settlement for that row.
+- If it reaches/exceeds Base Amount, one or more base cycles are completed.
+- Carry Forward = Cumulative Beat modulo Base Amount.
+- The next row starts from that carry, then adds its Beat Amount.
+*/
+function calculate(series){
+  let carry = 0;
+  let completed = 0;
+
+  series.rows.forEach((r,i)=>{
+    const beat = parseAmount(r.beatAmount);
+    r.baseCycle = completed + 1;
+
+    if(beat === ""){
+      r.netAmount = "";
+      r.cumulativeBeat = "";
+      r.carryForward = carry;
+      r.cyclesCompletedThisRow = 0;
+      r.totalCyclesCompleted = completed;
+      return;
+    }
+
+    r.netAmount = Number(state.baseAmount) - Number(beat);
+    const raw = Number(carry) + Number(beat);
+    r.cumulativeBeat = raw;
+
+    const cyclesThisRow = Math.floor(raw / Number(state.baseAmount));
+    r.cyclesCompletedThisRow = cyclesThisRow;
+    completed += cyclesThisRow;
+    r.totalCyclesCompleted = completed;
+
+    carry = raw % Number(state.baseAmount);
+    r.carryForward = carry;
+  });
+
+  series._carry = carry;
+  series._cyclesCompleted = completed;
+}
+
+function allFilled(series){
+  return series.rows.length > 0 && series.rows.every(r => parseAmount(r.beatAmount) !== "");
+}
+
+function updateSummary(){
+  const s = currentSeries();
+  calculate(s);
+  const totalPaid = s.rows.reduce((a,r)=>a+Number(parseAmount(r.moneyPaid)||0),0);
+  const totalBeat = s.rows.reduce((a,r)=>a+Number(parseAmount(r.beatAmount)||0),0);
+
+  document.getElementById("baseKpi").textContent = currency(state.baseAmount);
+  document.getElementById("paidKpi").textContent = currency(totalPaid);
+  document.getElementById("beatKpi").textContent = currency(totalBeat);
+  document.getElementById("carryKpi").textContent = currency(s._carry || 0);
+  document.getElementById("cyclesKpi").textContent = String(s._cyclesCompleted || 0);
+  document.getElementById("seriesBadge").textContent = s.name;
+  document.getElementById("completion").classList.toggle("show", allFilled(s));
+}
+
+function refreshCalculatedCells(fromIndex=0){
+  const s = currentSeries();
+  calculate(s);
+  for(let i=fromIndex;i<s.rows.length;i++){
+    const r=s.rows[i];
+    const cycle=document.getElementById(`cycle-${i}`);
+    const net=document.getElementById(`net-${i}`);
+    const cum=document.getElementById(`cum-${i}`);
+    const carry=document.getElementById(`carry-${i}`);
+
+    if(cycle) cycle.textContent=r.baseCycle;
+    if(net){
+      net.textContent=r.netAmount===""?"—":currency(r.netAmount);
+      net.classList.toggle("negative", Number(r.netAmount)<0);
+    }
+    if(cum){
+      cum.textContent=r.cumulativeBeat===""?"—":currency(r.cumulativeBeat);
+      cum.classList.toggle("cycle-hit", Number(r.cyclesCompletedThisRow)>0);
+    }
+    if(carry){
+      carry.textContent=currency(r.carryForward || 0);
+      carry.classList.toggle("cycle-hit", Number(r.cyclesCompletedThisRow)>0);
+    }
+  }
+  updateSummary();
+  save();
+}
+
+function createMoneyInput(value, rowIndex, key){
+  const inp=document.createElement("input");
+  inp.type="text";
+  inp.inputMode="numeric";
+  inp.autocomplete="off";
+  inp.enterKeyHint="done";
+  inp.value=value ?? "";
+  inp.className="money-input";
+
+  // Critical mobile behavior: never rebuild the table during typing.
+  inp.addEventListener("input",e=>{
+    const s=currentSeries();
+    s.rows[rowIndex][key]=e.target.value===""?"":parseAmount(e.target.value);
+    if(key==="beatAmount") refreshCalculatedCells(rowIndex);
+    else { updateSummary(); save(); }
+  });
+
+  inp.addEventListener("blur",()=>{
+    const val=parseAmount(inp.value);
+    inp.value=val===""?"":String(val);
+    const s=currentSeries();
+    s.rows[rowIndex][key]=val;
+    refreshCalculatedCells(key==="beatAmount"?rowIndex:0);
+  });
+  return inp;
+}
+
+function buildTable(){
+  const s=currentSeries();
+  calculate(s);
+  const body=document.getElementById("ledger");
+  body.innerHTML="";
+
+  s.rows.forEach((r,i)=>{
+    const tr=document.createElement("tr");
+
+    const sl=document.createElement("td");
+    sl.dataset.label="Serial No.";
+    sl.textContent=r.sl;
+
+    const cyc=document.createElement("td");
+    cyc.dataset.label="Base Cycle";
+    cyc.id=`cycle-${i}`;
+    cyc.textContent=r.baseCycle;
+
+    const dateTd=document.createElement("td");
+    dateTd.dataset.label="Date";
+    const date=document.createElement("input");
+    date.type="date"; date.value=r.date;
+    date.addEventListener("change",e=>{r.date=e.target.value;save();});
+    dateTd.appendChild(date);
+
+    const paidTd=document.createElement("td");
+    paidTd.dataset.label="Money Paid";
+    paidTd.appendChild(createMoneyInput(r.moneyPaid,i,"moneyPaid"));
+
+    const beatTd=document.createElement("td");
+    beatTd.dataset.label="Beat Amount";
+    beatTd.appendChild(createMoneyInput(r.beatAmount,i,"beatAmount"));
+
+    const net=document.createElement("td");
+    net.dataset.label="Net Amount";
+    net.id=`net-${i}`; net.className="num";
+    net.textContent=r.netAmount===""?"—":currency(r.netAmount);
+    if(Number(r.netAmount)<0) net.classList.add("negative");
+
+    const cum=document.createElement("td");
+    cum.dataset.label="Cumulative Beat";
+    cum.id=`cum-${i}`; cum.className="num";
+    cum.textContent=r.cumulativeBeat===""?"—":currency(r.cumulativeBeat);
+    if(Number(r.cyclesCompletedThisRow)>0) cum.classList.add("cycle-hit");
+
+    const cf=document.createElement("td");
+    cf.dataset.label="Carry Forward";
+    cf.id=`carry-${i}`; cf.className="num carry";
+    cf.textContent=currency(r.carryForward || 0);
+    if(Number(r.cyclesCompletedThisRow)>0) cf.classList.add("cycle-hit");
+
+    tr.append(sl,cyc,dateTd,paidTd,beatTd,net,cum,cf);
+    body.appendChild(tr);
+  });
+
+  updateSummary();
+}
+
+function renderSeriesSelect(){
+  const sel=document.getElementById("seriesSelect");
+  sel.innerHTML="";
+  state.series.forEach(s=>{
+    const opt=document.createElement("option");
+    opt.value=s.id; opt.textContent=s.name;
+    if(s.id===state.currentSeriesId) opt.selected=true;
+    sel.appendChild(opt);
+  });
+}
+document.getElementById("seriesSelect").addEventListener("change",e=>{
+  state.currentSeriesId=Number(e.target.value);
+  buildTable(); save();
+});
+
+function addRow(){
+  const s=currentSeries();
+  const last=s.rows[s.rows.length-1];
+  const newDate=last?addMonths(last.date,1):s.startDate;
+  s.rows.push({
+    sl:s.rows.length+1,
+    date:newDate,
+    moneyPaid:state.defaultMoneyPaid,
+    beatAmount:""
+  });
+  buildTable(); save();
+  setTimeout(()=>window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"}),50);
+}
+
+function startNewSeries(){
+  const old=currentSeries();
+  const last=old.rows[old.rows.length-1];
+  const newId=Math.max(...state.series.map(s=>s.id))+1;
+  const nextStart=last?addMonths(last.date,1):START_DATE;
+  const s={
+    id:newId,
+    name:`Series ${newId}`,
+    startDate:nextStart,
+    rows:rowsFrom(nextStart,INITIAL_ROWS,state.defaultMoneyPaid)
+  };
+  state.series.push(s);
+  state.currentSeriesId=newId;
+  renderSeriesSelect();
+  buildTable(); save();
+}
+
+function askAddChoice(){
+  const s=currentSeries();
+  if(allFilled(s)) document.getElementById("seriesDialog").showModal();
+  else addRow();
+}
+
+document.getElementById("addRow").onclick=askAddChoice;
+document.getElementById("addRowTop").onclick=askAddChoice;
+document.getElementById("continueSeries").onclick=addRow;
+document.getElementById("newSeries").onclick=startNewSeries;
+document.getElementById("dialogContinue").onclick=()=>{
+  document.getElementById("seriesDialog").close(); addRow();
+};
+document.getElementById("dialogNew").onclick=()=>{
+  document.getElementById("seriesDialog").close(); startNewSeries();
+};
+document.getElementById("dialogCancel").onclick=()=>document.getElementById("seriesDialog").close();
+
+document.getElementById("applySettings").onclick=()=>{
+  const b=parseAmount(document.getElementById("baseInput").value);
+  const p=parseAmount(document.getElementById("paidDefaultInput").value);
+  if(b!=="" && Number(b)>0) state.baseAmount=Number(b);
+  if(p!=="" && Number(p)>=0) state.defaultMoneyPaid=Number(p);
+  document.getElementById("baseInput").value=state.baseAmount;
+  document.getElementById("paidDefaultInput").value=state.defaultMoneyPaid;
+  refreshCalculatedCells(0);
+};
+
+document.getElementById("resetCurrent").onclick=()=>{
+  const s=currentSeries();
+  if(confirm(`Reset all Beat Amounts in ${s.name}? Dates and Money Paid will remain.`)){
+    s.rows.forEach(r=>r.beatAmount="");
+    buildTable(); save();
+  }
+};
+
+function exportExcel(){
+  if(typeof XLSX==="undefined"){
+    alert("Excel export module has not loaded. Check internet connection and reload once.");
+    return;
+  }
+  const s=currentSeries();
+  calculate(s);
+
+  const rows=[
+    ["Money & Beat Ledger", "", "", "", "", "", "", ""],
+    ["Series", s.name, "Base Amount", state.baseAmount, "Default Money Paid", state.defaultMoneyPaid, "", ""],
+    ["Start Date", s.startDate, "Rows", s.rows.length, "Base Cycles Completed", s._cyclesCompleted||0, "Carry Forward", s._carry||0],
+    [],
+    ["Sl. No.","Base Cycle","Date","Money Paid","Beat Amount","Net Amount","Cumulative Beat","Carry Forward"]
+  ];
+
+  s.rows.forEach(r=>{
+    rows.push([
+      r.sl, r.baseCycle, r.date,
+      Number(parseAmount(r.moneyPaid)||0),
+      parseAmount(r.beatAmount)===""?"":Number(parseAmount(r.beatAmount)),
+      r.netAmount===""?"":r.netAmount,
+      r.cumulativeBeat===""?"":r.cumulativeBeat,
+      r.carryForward||0
+    ]);
+  });
+
+  rows.push([]);
+  rows.push(["TOTAL","","",
+    s.rows.reduce((a,r)=>a+Number(parseAmount(r.moneyPaid)||0),0),
+    s.rows.reduce((a,r)=>a+Number(parseAmount(r.beatAmount)||0),0),
+    "","",""
+  ]);
+
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"]=[
+    {wch:10},{wch:12},{wch:14},{wch:16},{wch:16},{wch:16},{wch:18},{wch:16}
+  ];
+  ws["!autofilter"]={ref:`A5:H${5+s.rows.length}`};
+
+  // Currency formats
+  for(let row=6;row<=5+s.rows.length;row++){
+    ["D","E","F","G","H"].forEach(c=>{
+      const cell=ws[`${c}${row}`];
+      if(cell && typeof cell.v==="number") cell.z='₹#,##0';
+    });
+  }
+  ["D2","F2","H3"].forEach(a=>{ if(ws[a]) ws[a].z='₹#,##0'; });
+
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,s.name.slice(0,31));
+  XLSX.writeFile(wb,`Money_Beat_${s.name.replace(/\s+/g,"_")}.xlsx`);
+}
+document.getElementById("downloadExcel").onclick=exportExcel;
+
+document.getElementById("downloadBackup").onclick=()=>{
+  save();
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="money-beat-ledger-backup.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+document.getElementById("restoreBackup").onclick=()=>document.getElementById("restoreFile").click();
+document.getElementById("restoreFile").addEventListener("change",e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const restored=JSON.parse(reader.result);
+      if(!restored.series || !Array.isArray(restored.series)) throw new Error("Invalid backup");
+      state=restored; save();
+      document.getElementById("baseInput").value=state.baseAmount;
+      document.getElementById("paidDefaultInput").value=state.defaultMoneyPaid;
+      renderSeriesSelect(); buildTable();
+      alert("Backup restored.");
+    }catch(err){ alert("Could not restore this backup file."); }
+  };
+  reader.readAsText(file);
+  e.target.value="";
+});
+
+document.getElementById("baseInput").value=state.baseAmount;
+document.getElementById("paidDefaultInput").value=state.defaultMoneyPaid;
+renderSeriesSelect();
+buildTable();
+
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>

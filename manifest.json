@@ -1,0 +1,9 @@
+{
+  "name": "Money & Beat Ledger",
+  "short_name": "Beat Ledger",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "icons": []
+}
